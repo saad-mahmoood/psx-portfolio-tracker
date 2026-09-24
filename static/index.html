@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PSX Portfolio Tracker</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="eyebrow">Pakistan Stock Exchange</p>
+      <h1>Portfolio Tracker</h1>
+    </div>
+    <div class="status">
+      <span id="market" class="pill">—</span>
+      <span id="stale" class="pill stale hidden">Stale data</span>
+      <time id="updated">Last updated —</time>
+    </div>
+  </header>
+
+  <section class="panel">
+    <label class="amount">
+      <span>Total Portfolio Amount (Rs.)</span>
+      <input id="amount" inputmode="decimal" value="5,00,000" autocomplete="off">
+    </label>
+    <div class="actions">
+      <button id="refresh" type="button">Fetch Latest</button>
+      <button id="export-pdf" type="button" class="ghost" disabled>Export PDF</button>
+      <button id="export-xls" type="button" class="ghost" disabled>Export XLS</button>
+    </div>
+    <div class="legend">
+      <span><i class="swatch input"></i> Input</span>
+      <span><i class="swatch live"></i> Live</span>
+      <span><i class="swatch calc"></i> Calculated</span>
+      <span><i class="swatch grey"></i> Stale</span>
+    </div>
+    <div id="checks" class="checks"></div>
+  </section>
+
+  <nav class="tabs">
+    <button type="button" class="active" data-tab="portfolio">Portfolio</button>
+    <button type="button" data-tab="inputs">Inputs</button>
+    <button type="button" data-tab="raw">Raw Data</button>
+    <button type="button" data-tab="dividends">Dividend Log</button>
+  </nav>
+
+  <p id="loading" class="loading">Fetching live prices, ranges, and dividends…</p>
+  <p id="error" class="error hidden"></p>
+
+  <div id="portfolio" class="sheet"></div>
+  <div id="inputs" class="sheet hidden"></div>
+  <div id="raw" class="sheet hidden"></div>
+  <div id="dividends" class="sheet hidden"></div>
+
+  <p class="note">
+    LDCP, price, 52-week range, and YTD come from the PSX Data Portal.
+    Dividend yield, frequency, and payout history come from StockAnalysis.
+    The 3-month gain is the current price against the PSX closing price three months ago.
+    The 52-week gain uses the PSX 1-year change. The TradingView watchlist is private, so it is not used as a feed.
+  </p>
+  <script src="/app.js"></script>
+</body>
+</html>

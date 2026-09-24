@@ -1,0 +1,31 @@
+{
+  "stocks": [
+    {"rank": 1, "symbol": "MARI", "name": "Mari Energies Limited", "sector": "E&P", "weight": 0.06, "base": 700, "bull": 780},
+    {"rank": 2, "symbol": "OGDC", "name": "Oil & Gas Development Co. Ltd.", "sector": "E&P", "weight": 0.06, "base": 395, "bull": 450},
+    {"rank": 3, "symbol": "POL", "name": "Pakistan Oilfields Ltd.", "sector": "E&P", "weight": 0.05, "base": 725, "bull": 800},
+    {"rank": 4, "symbol": "PPL", "name": "Pakistan Petroleum Ltd.", "sector": "E&P", "weight": 0.05, "base": 315, "bull": 360},
+    {"rank": 5, "symbol": "UBL", "name": "United Bank Ltd.", "sector": "Banking", "weight": 0.04, "base": 460, "bull": 510},
+    {"rank": 6, "symbol": "HBL", "name": "Habib Bank Ltd.", "sector": "Banking", "weight": 0.04, "base": 320, "bull": 350},
+    {"rank": 7, "symbol": "MCB", "name": "MCB Bank Ltd.", "sector": "Banking", "weight": 0.04, "base": 415, "bull": 450},
+    {"rank": 8, "symbol": "BAHL", "name": "Bank AL-Habib Ltd.", "sector": "Banking", "weight": 0.04, "base": 165, "bull": 180},
+    {"rank": 9, "symbol": "NBP", "name": "National Bank Of Pakistan", "sector": "Banking", "weight": 0.04, "base": 178, "bull": 195},
+    {"rank": 10, "symbol": "SNBL", "name": "Soneri Bank Ltd.", "sector": "Banking", "weight": 0.02, "base": 21.5, "bull": 24},
+    {"rank": 11, "symbol": "BOP", "name": "The Bank Of Punjab", "sector": "Banking", "weight": 0.02, "base": 34, "bull": 38},
+    {"rank": 12, "symbol": "FFC", "name": "Fauji Fertilizer Co. Ltd.", "sector": "Fertilizer", "weight": 0.05, "base": 570, "bull": 630},
+    {"rank": 13, "symbol": "EFERT", "name": "Engro Fertilizers Ltd.", "sector": "Fertilizer", "weight": 0.05, "base": 195, "bull": 210},
+    {"rank": 14, "symbol": "FATIMA", "name": "Fatima Fertilizer Co. Ltd.", "sector": "Fertilizer", "weight": 0.04, "base": 155, "bull": 168},
+    {"rank": 15, "symbol": "LUCK", "name": "Lucky Cement Ltd.", "sector": "Cement", "weight": 0.04, "base": 440, "bull": 480},
+    {"rank": 16, "symbol": "DGKC", "name": "D. G. Khan Cement Co. Ltd.", "sector": "Cement", "weight": 0.03, "base": 215, "bull": 240},
+    {"rank": 17, "symbol": "FCCL", "name": "Fauji Cement Company Ltd.", "sector": "Cement", "weight": 0.03, "base": 58, "bull": 64},
+    {"rank": 18, "symbol": "MLCF", "name": "Maple Leaf Cement Factory Ltd.", "sector": "Cement", "weight": 0.02, "base": 100, "bull": 110},
+    {"rank": 19, "symbol": "ATRL", "name": "Attock Refinery Ltd.", "sector": "Refinery", "weight": 0.04, "base": 1175, "bull": 1300},
+    {"rank": 20, "symbol": "NRL", "name": "National Refinery Ltd.", "sector": "Refinery", "weight": 0.03, "base": 555, "bull": 610},
+    {"rank": 21, "symbol": "PRL", "name": "Pakistan Refinery Ltd.", "sector": "Refinery", "weight": 0.02, "base": 95, "bull": 110},
+    {"rank": 22, "symbol": "CNERGY", "name": "Cnergyico Pk Ltd.", "sector": "Refinery", "weight": 0.01, "base": 15, "bull": 19},
+    {"rank": 23, "symbol": "PSO", "name": "Pakistan State Oil Co. Ltd.", "sector": "OMC/Gas", "weight": 0.04, "base": 380, "bull": 430},
+    {"rank": 24, "symbol": "APL", "name": "Attock Petroleum Ltd.", "sector": "OMC/Gas", "weight": 0.04, "base": 620, "bull": 670},
+    {"rank": 25, "symbol": "SNGP", "name": "Sui Northern Gas Pipelines Ltd.", "sector": "OMC/Gas", "weight": 0.04, "base": 100, "bull": 112},
+    {"rank": 26, "symbol": "PAEL", "name": "Pak Elektron Ltd.", "sector": "Engineering", "weight": 0.04, "base": 40, "bull": 46},
+    {"rank": 27, "symbol": "AHCL", "name": "Arif Habib Corp. Ltd.", "sector": "Financial Svcs", "weight": 0.02, "base": 17, "bull": 19.5}
+  ]
+}
