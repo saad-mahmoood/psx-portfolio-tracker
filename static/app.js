@@ -404,7 +404,7 @@ async function load() {
   try {
     let payload = await readPortfolio(true);
     showPortfolio(payload);
-    while (payload.refreshing) {
+    while (payload.refreshing && !(payload.error && !(payload.rows && payload.rows.length))) {
       await new Promise((resolve) => setTimeout(resolve, 2500));
       payload = await readPortfolio(false);
       showPortfolio(payload);

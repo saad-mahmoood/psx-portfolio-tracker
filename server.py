@@ -91,9 +91,15 @@ def save_cache():
 
 
 def fetch(url):
-    req = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(req, timeout=30) as response:
-        return response.read().decode("utf-8", "replace")
+    last_error = None
+    for _ in range(3):
+        try:
+            req = urllib.request.Request(url, headers=HEADERS)
+            with urllib.request.urlopen(req, timeout=20) as response:
+                return response.read().decode("utf-8", "replace")
+        except Exception as error:  # noqa: BLE001 - retry dropped connections from the host
+            last_error = error
+    raise last_error
 
 
 def parse_pct(text):
@@ -237,12 +243,12 @@ def refresh_symbol(symbol, market):
     try:
         result["stats"] = parse_company(fetch(f"https://dps.psx.com.pk/company/{symbol}"))
         result["stats_ok"] = True
-    except (urllib.error.URLError, TimeoutError, ValueError):
+    except Exception:  # noqa: BLE001 - one bad quote must not stop the sheet
         result["stats_ok"] = False
     try:
         result["eod"] = parse_eod(fetch(f"https://dps.psx.com.pk/timeseries/eod/{symbol}"))
         result["eod_ok"] = bool(result["eod"])
-    except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
+    except Exception:  # noqa: BLE001
         result["eod_ok"] = False
     try:
         result["div"] = parse_dividend(
@@ -255,7 +261,7 @@ def refresh_symbol(symbol, market):
             result["div_ok"] = True
         else:
             result["div_ok"] = False
-    except (urllib.error.URLError, TimeoutError, ValueError):
+    except Exception:  # noqa: BLE001
         result["div_ok"] = False
     result["market_ok"] = symbol in market
     return result
@@ -276,16 +282,19 @@ def build_snapshot():
     try:
         market = parse_market(fetch("https://dps.psx.com.pk/market-watch"))
         market_ok = True
-    except (urllib.error.URLError, TimeoutError):
+    except Exception:  # noqa: BLE001
         market = {}
         market_ok = False
         stale = True
 
     fetched = {}
-    with ThreadPoolExecutor(max_workers=12) as pool:
+    with ThreadPoolExecutor(max_workers=8) as pool:
         futures = [pool.submit(refresh_symbol, symbol, market) for symbol in symbols]
         for future in as_completed(futures):
-            item = future.result()
+            try:
+                item = future.result()
+            except Exception:  # noqa: BLE001
+                continue
             fetched[item["symbol"]] = item
 
     current = now_pkt()
@@ -414,12 +423,13 @@ def build_snapshot():
 
 
 def refresh_in_background():
-    global _refreshing
+    global _refreshing, _refresh_error
 
     with _lock:
         if _refreshing:
             return
         _refreshing = True
+        _refresh_error = None
 
     def run():
         global _snapshot, _refreshing, _refresh_error
@@ -614,7 +624,8 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_error(404)
 
     def send_portfolio(self):
-        if "latest" in self.path or _snapshot is None:
+        wants_latest = "latest" in self.path
+        if wants_latest or (_snapshot is None and not _refreshing and _refresh_error is None):
             refresh_in_background()
         if _snapshot:
             payload = dict(_snapshot)
@@ -624,7 +635,7 @@ class Handler(SimpleHTTPRequestHandler):
         status = market_status()
         self.send_json(
             {
-                "refreshing": True,
+                "refreshing": _refreshing,
                 "rows": [],
                 "updated": "",
                 "market": status,
