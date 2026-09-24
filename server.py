@@ -169,6 +169,22 @@ def infer_frequency(history):
     return "Annual", "Ann."
 
 
+def parse_quote(html):
+    start = html.find("quote:{")
+    blob = html[start:start + 2500] if start >= 0 else ""
+
+    def number(key):
+        match = re.search(rf"\b{key}:(-?\d+(?:\.\d+)?)", blob)
+        return float(match.group(1)) if match else None
+
+    return {
+        "price": number("p"),
+        "ldcp": number("cl"),
+        "high52": number("h52"),
+        "low52": number("l52"),
+    }
+
+
 def parse_dividend(html):
     frequency = re.search(r'frequency:"([^"]*)"', html)
     yield_text = re.search(r'infoTable:\{yield:"([^"]*)"', html)
@@ -191,6 +207,7 @@ def parse_dividend(html):
         "marker": mapped[1] if mapped else None,
         "yield": div_yield,
         "history": history,
+        **parse_quote(html),
     }
 
 
@@ -257,8 +274,17 @@ def refresh_symbol(symbol, market):
         result["div_ok"] = True
     except urllib.error.HTTPError as error:
         if error.code == 404:
-            result["div"] = {"frequency": "None", "marker": None, "yield": 0.0, "history": []}
+            result["div"] = {
+                "frequency": "None",
+                "marker": None,
+                "yield": 0.0,
+                "history": [],
+            }
             result["div_ok"] = True
+            try:
+                result["div"].update(parse_quote(fetch(f"https://stockanalysis.com/quote/psx/{symbol}/")))
+            except Exception:  # noqa: BLE001
+                pass
         else:
             result["div_ok"] = False
     except Exception:  # noqa: BLE001
@@ -312,13 +338,25 @@ def build_snapshot():
         previous_eod = _cache["eod"].get(symbol, {})
         previous_div = _cache["div"].get(symbol, {})
 
-        quote = market.get(symbol, {})
-        ldcp, ldcp_stale = keep(previous_market.get("ldcp"), quote.get("ldcp"), market_ok and symbol in market)
-        price, price_stale = keep(previous_market.get("price"), quote.get("price"), market_ok and symbol in market)
+        quote = dict(market.get(symbol, {}))
+        backup = (item.get("div") or {}) if item.get("div_ok") else {}
+        if not quote.get("price") and backup.get("price"):
+            quote["price"] = backup["price"]
+        if not quote.get("ldcp") and backup.get("ldcp"):
+            quote["ldcp"] = backup["ldcp"]
+        price_ok = bool(quote.get("price"))
+        ldcp, ldcp_stale = keep(previous_market.get("ldcp"), quote.get("ldcp"), price_ok or (market_ok and symbol in market))
+        price, price_stale = keep(previous_market.get("price"), quote.get("price"), price_ok or (market_ok and symbol in market))
         if ldcp is not None:
             _cache["market"][symbol] = {"ldcp": ldcp, "price": price}
 
         stats = item.get("stats") or {}
+        if not item.get("stats_ok"):
+            if backup.get("high52"):
+                stats = dict(stats)
+                stats["high52"] = backup["high52"]
+                stats["low52"] = backup["low52"]
+                item["stats_ok"] = True
         high, high_stale = keep(previous_stats.get("high52"), stats.get("high52"), item.get("stats_ok"))
         low, low_stale = keep(previous_stats.get("low52"), stats.get("low52"), item.get("stats_ok"))
         ytd, ytd_stale = keep(previous_stats.get("ytd"), stats.get("ytd"), item.get("stats_ok"))
