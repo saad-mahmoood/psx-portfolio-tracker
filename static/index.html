@@ -45,6 +45,21 @@
     <button type="button" data-tab="dividends">Dividend Log</button>
   </nav>
 
+  <div class="filters">
+    <label class="filter">
+      <span>Search</span>
+      <input id="filter-query" type="search" placeholder="Symbol, name, or sector" autocomplete="off">
+    </label>
+    <label class="filter">
+      <span>Sector</span>
+      <select id="filter-sector">
+        <option value="">All sectors</option>
+      </select>
+    </label>
+    <button id="filter-clear" type="button" class="ghost">Clear</button>
+    <p id="filter-meta" class="filter-meta"></p>
+  </div>
+
   <p id="loading" class="loading">Fetching live prices, ranges, and dividends…</p>
   <p id="error" class="error hidden"></p>
 

@@ -30,7 +30,10 @@ const COLUMNS = [
 ];
 
 const GAIN_INDEXES = new Set([15, 17, 23, 24, 25]);
+const VIEW_KEY = "psx-view";
 let snapshot = null;
+let sortState = { index: null, direction: "asc" };
+let filterState = { query: "", sector: "" };
 
 const amountInput = document.getElementById("amount");
 const sheets = {
@@ -75,6 +78,145 @@ function gainClass(value) {
   if (value > 0) return "pos";
   if (value < 0) return "neg";
   return "";
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function filtersActive() {
+  return Boolean(filterState.query.trim() || filterState.sector);
+}
+
+function rowMatches(row) {
+  if (filterState.sector && row.sector !== filterState.sector) return false;
+  const query = filterState.query.trim().toLowerCase();
+  if (!query) return true;
+  return [row.symbol, row.name, row.sector].join(" ").toLowerCase().includes(query);
+}
+
+function payoutAmount(text) {
+  if (!text || text === "None" || text === "N/A" || text === "—") return null;
+  const match = String(text).replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+}
+
+function sortValue(row, index, amount) {
+  const item = amount > 0 ? metrics(row, amount) : null;
+  switch (index) {
+    case 0: return row.rank;
+    case 1: return row.symbol || "";
+    case 2: return row.name || "";
+    case 3: return row.sector || "";
+    case 4: return row.weight;
+    case 5: return item ? item.allocation : null;
+    case 6: return row.base;
+    case 7: return row.bull;
+    case 8: return row.ldcp;
+    case 9: return row.price;
+    case 10: return row.yield;
+    case 11: return item ? item.shares : null;
+    case 12: return item ? item.invested : null;
+    case 13: return item ? item.cash : null;
+    case 14: return item ? item.potBase : null;
+    case 15: return item ? item.gainBase : null;
+    case 16: return item ? item.potBull : null;
+    case 17: return item ? item.gainBull : null;
+    case 18: return row.frequency || "";
+    case 19: return payoutAmount(row.payouts && row.payouts[0]);
+    case 20: return payoutAmount(row.payouts && row.payouts[1]);
+    case 21: return payoutAmount(row.payouts && row.payouts[2]);
+    case 22: return payoutAmount(row.payouts && row.payouts[3]);
+    case 23: return row.gain3m;
+    case 24: return row.ytd;
+    case 25: return row.year;
+    case 26: return row.high52;
+    case 27: return row.low52;
+    default: return null;
+  }
+}
+
+function compareValues(a, b, direction) {
+  const dir = direction === "asc" ? 1 : -1;
+  const missing = (value) => value === null || value === undefined || value === "" || (typeof value === "number" && Number.isNaN(value));
+  if (missing(a) && missing(b)) return 0;
+  if (missing(a)) return 1;
+  if (missing(b)) return -1;
+  if (typeof a === "string" || typeof b === "string") {
+    return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" }) * dir;
+  }
+  return (a - b) * dir;
+}
+
+function visibleRows() {
+  const amount = parseAmount(amountInput.value);
+  const indexed = snapshot.rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => rowMatches(row));
+  if (sortState.index === null) return indexed.map(({ row }) => row);
+  const column = sortState.index;
+  const direction = sortState.direction;
+  return indexed
+    .sort((a, b) => {
+      const result = compareValues(sortValue(a.row, column, amount), sortValue(b.row, column, amount), direction);
+      return result || a.index - b.index;
+    })
+    .map(({ row }) => row);
+}
+
+function saveView() {
+  sessionStorage.setItem(VIEW_KEY, JSON.stringify({ query: filterState.query, sector: filterState.sector, sort: sortState }));
+}
+
+function loadView() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(VIEW_KEY) || "null");
+    if (!saved) return;
+    filterState.query = saved.query || "";
+    filterState.sector = saved.sector || "";
+    if (saved.sort && Number.isInteger(saved.sort.index) && saved.sort.index >= 0 && saved.sort.index < COLUMNS.length) {
+      sortState = { index: saved.sort.index, direction: saved.sort.direction === "desc" ? "desc" : "asc" };
+    }
+  } catch (error) {
+    filterState = { query: "", sector: "" };
+    sortState = { index: null, direction: "asc" };
+  }
+}
+
+function syncSectorOptions() {
+  const select = document.getElementById("filter-sector");
+  const sectors = [...new Set(snapshot.rows.map((row) => row.sector).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  if (filterState.sector && !sectors.includes(filterState.sector)) filterState.sector = "";
+  const markup = [`<option value="">All sectors</option>`, ...sectors.map((sector) => `<option value="${escapeHtml(sector)}">${escapeHtml(sector)}</option>`)].join("");
+  if (select.dataset.options !== markup) {
+    select.innerHTML = markup;
+    select.dataset.options = markup;
+  }
+  select.value = filterState.sector;
+}
+
+function updateFilterMeta() {
+  const shown = visibleRows().length;
+  const total = snapshot.rows.length;
+  const parts = [filtersActive() ? `Showing ${shown} of ${total}` : `${total} stocks`];
+  if (sortState.index !== null) {
+    parts.push(`Sorted by ${COLUMNS[sortState.index][0]} ${sortState.direction === "asc" ? "ascending" : "descending"}`);
+  }
+  document.getElementById("filter-meta").textContent = parts.join(" · ");
+}
+
+function renderViews() {
+  if (!snapshot || !snapshot.rows) return;
+  syncSectorOptions();
+  renderPortfolio();
+  renderRaw();
+  renderDividends();
+  updateFilterMeta();
+  saveView();
 }
 
 function metrics(row, amount) {
@@ -128,12 +270,16 @@ function renderChecks(rows, amount) {
 
 function renderPortfolio() {
   const amount = parseAmount(amountInput.value);
-  const rows = snapshot.rows;
-  renderChecks(rows, amount);
+  renderChecks(snapshot.rows, amount);
+  const rows = visibleRows();
   const paused = !(amount > 0);
+  const filtered = filtersActive();
   const head = COLUMNS.map(([label, align], index) => {
     const sticky = index < 2 ? " sticky" : "";
-    return `<th class="${align}${sticky}">${label}</th>`;
+    const active = sortState.index === index ? ` sort sort-${sortState.direction}` : "";
+    const aria = sortState.index === index ? ` aria-sort="${sortState.direction === "asc" ? "ascending" : "descending"}"` : ` aria-sort="none"`;
+    const mark = sortState.index === index ? (sortState.direction === "asc" ? "▲" : "▼") : "";
+    return `<th class="${align}${sticky}${active}"${aria}><button type="button" class="sort-btn" data-sort="${index}">${escapeHtml(label)}${mark ? `<span aria-hidden="true">${mark}</span>` : ""}</button></th>`;
   }).join("");
   const body = rows.map((row) => {
     const item = paused ? null : metrics(row, amount);
@@ -179,7 +325,7 @@ function renderPortfolio() {
   }).join("");
 
   let total = "";
-  if (!paused) {
+  if (!paused && rows.length) {
     const sums = rows.reduce((sum, row) => {
       const item = metrics(row, amount);
       sum.weight += row.weight;
@@ -196,7 +342,7 @@ function renderPortfolio() {
     const gainBase = invested ? sums.potBase / invested - 1 : null;
     const gainBull = invested ? sums.potBull / invested - 1 : null;
     const blanks = Array(28).fill("—");
-    blanks[1] = "TOTAL";
+    blanks[1] = filtered ? "FILTERED" : "TOTAL";
     blanks[4] = pct(sums.weight);
     blanks[5] = indian(sums.allocation);
     blanks[10] = pct(yieldAvg);
@@ -211,30 +357,35 @@ function renderPortfolio() {
       return `<td class="${COLUMNS[index][1]} ${GAIN_INDEXES.has(index) ? gainClass(gain) : ""}">${text}</td>`;
     }).join("")}</tr>`;
   }
-  sheets.portfolio.innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}${total}</tbody></table>`;
+  const empty = rows.length ? "" : `<tr><td class="empty" colspan="${COLUMNS.length}">No stocks match this filter.</td></tr>`;
+  sheets.portfolio.innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}${empty}${total}</tbody></table>`;
 }
 
 function renderRaw() {
   const head = ["Symbol", "LDCP", "Price", "3M base close", "YTD base close", "1Y base close", "YTD", "1Y", "52W high", "52W low", "Yield"].map((label) => `<th>${label}</th>`).join("");
-  const body = snapshot.rows.map((row) => `<tr>
+  const rows = visibleRows();
+  const body = rows.map((row) => `<tr>
     <td class="left">${row.symbol}</td>
     <td>${indian(row.ldcp)}</td><td>${indian(row.price)}</td>
     <td>${indian(row.base3m)}</td><td>${indian(row.baseYtd)}</td><td>${indian(row.base1y)}</td>
     <td>${pct(row.ytd)}</td><td>${pct(row.year)}</td>
     <td>${indian(row.high52)}</td><td>${indian(row.low52)}</td><td>${pct(row.yield)}</td>
   </tr>`).join("");
-  sheets.raw.innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  const empty = rows.length ? "" : `<tr><td class="empty" colspan="11">No stocks match this filter.</td></tr>`;
+  sheets.raw.innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}${empty}</tbody></table>`;
 }
 
 function renderDividends() {
   const head = ["Symbol", "Date", "Amount (Rs.)", "Shown as"].map((label) => `<th class="left">${label}</th>`).join("");
-  const body = snapshot.rows.flatMap((row) => {
+  const rows = visibleRows();
+  const body = rows.flatMap((row) => {
     if (!row.history.length) {
       return [`<tr><td class="left">${row.symbol}</td><td class="left" colspan="3">None</td></tr>`];
     }
     return row.history.map((item) => `<tr><td class="left">${row.symbol}</td><td class="left">${item.date}</td><td>${indian(item.amount)}</td><td class="left">${row.payouts.includes("None") ? "None" : row.frequency}</td></tr>`);
   }).join("");
-  sheets.dividends.innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  const empty = rows.length ? "" : `<tr><td class="empty left" colspan="4">No stocks match this filter.</td></tr>`;
+  sheets.dividends.innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}${empty}</tbody></table>`;
 }
 
 function renderInputs() {
@@ -304,7 +455,7 @@ function showError(message) {
 function sheetModel() {
   const amount = parseAmount(amountInput.value);
   const headers = COLUMNS.map((column) => column[0]);
-  const rows = snapshot.rows.map((row) => {
+  const rows = visibleRows().map((row) => {
     const item = amount > 0 ? metrics(row, amount) : null;
     return [
       row.rank, row.symbol, row.name, row.sector, row.weight,
@@ -316,7 +467,7 @@ function sheetModel() {
       row.gain3m, row.ytd, row.year, row.high52, row.low52,
     ];
   });
-  const sums = snapshot.rows.reduce((sum, row) => {
+  const sums = visibleRows().reduce((sum, row) => {
     const item = amount > 0 ? metrics(row, amount) : null;
     if (!item) return sum;
     sum.weight += row.weight;
@@ -330,7 +481,7 @@ function sheetModel() {
   }, { weight: 0, allocation: 0, invested: 0, cash: 0, potBase: 0, potBull: 0, yield: 0 });
   const invested = sums.invested || 0;
   const total = Array(headers.length).fill(null);
-  total[1] = "TOTAL";
+  total[1] = filtersActive() ? "FILTERED" : "TOTAL";
   total[4] = sums.weight;
   total[5] = sums.allocation;
   total[10] = invested ? sums.yield / invested : null;
@@ -389,10 +540,8 @@ function showPortfolio(payload) {
   market.className = "pill " + (payload.marketOpen ? "open" : "closed");
   document.getElementById("stale").classList.toggle("hidden", !payload.stale);
   if (payload.rows && payload.rows.length) {
-    renderPortfolio();
     renderInputs();
-    renderRaw();
-    renderDividends();
+    renderViews();
   }
 }
 
@@ -422,7 +571,7 @@ document.getElementById("refresh").onclick = load;
 document.getElementById("export-pdf").onclick = () => download("/api/export.pdf", "PSX-Portfolio.pdf").catch((error) => showError(error.message));
 document.getElementById("export-xls").onclick = () => download("/api/export.xlsx", "PSX-Portfolio.xlsx").catch((error) => showError(error.message));
 amountInput.addEventListener("input", () => {
-  if (snapshot) renderPortfolio();
+  if (snapshot) renderViews();
 });
 amountInput.addEventListener("blur", () => {
   const amount = parseAmount(amountInput.value);
@@ -439,7 +588,35 @@ document.querySelectorAll(".tabs button").forEach((button) => {
     document.querySelectorAll(".tabs button").forEach((item) => item.classList.remove("active"));
     button.classList.add("active");
     Object.entries(sheets).forEach(([name, node]) => node.classList.toggle("hidden", name !== button.dataset.tab));
+    document.querySelector(".filters").classList.toggle("hidden", button.dataset.tab === "inputs");
   };
+});
+
+loadView();
+document.getElementById("filter-query").value = filterState.query;
+document.getElementById("filter-query").addEventListener("input", (event) => {
+  filterState.query = event.target.value;
+  if (snapshot) renderViews();
+});
+document.getElementById("filter-sector").addEventListener("change", (event) => {
+  filterState.sector = event.target.value;
+  if (snapshot) renderViews();
+});
+document.getElementById("filter-clear").onclick = () => {
+  filterState = { query: "", sector: "" };
+  sortState = { index: null, direction: "asc" };
+  document.getElementById("filter-query").value = "";
+  document.getElementById("filter-sector").value = "";
+  if (snapshot) renderViews();
+  else saveView();
+};
+sheets.portfolio.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-sort]");
+  if (!button) return;
+  const index = Number(button.dataset.sort);
+  if (sortState.index === index) sortState.direction = sortState.direction === "asc" ? "desc" : "asc";
+  else sortState = { index, direction: "asc" };
+  renderViews();
 });
 
 load();
