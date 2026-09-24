@@ -39,6 +39,9 @@ FREQ_MAP = {
 
 _lock = threading.Lock()
 _cache = {"market": {}, "stats": {}, "eod": {}, "div": {}}
+_snapshot = None
+_refreshing = False
+_refresh_error = None
 
 
 def now_pkt():
@@ -314,9 +317,9 @@ def build_snapshot():
 
         series = item.get("eod") if item.get("eod_ok") else previous_eod.get("series")
         eod_stale = not item.get("eod_ok")
-        if item.get("eod_ok"):
-            _cache["eod"][symbol] = {"series": series}
-        base_3m = base_1y = base_ytd = None
+        base_3m = previous_eod.get("base3m")
+        base_1y = previous_eod.get("base1y")
+        base_ytd = previous_eod.get("baseYtd")
         if series:
             found_3m = close_on_or_before(series, three_months)
             found_1y = close_on_or_before(series, year_ago)
@@ -324,6 +327,7 @@ def build_snapshot():
             base_3m = found_3m[1] if found_3m else None
             base_1y = found_1y[1] if found_1y else None
             base_ytd = found_ytd[1] if found_ytd else None
+        _cache["eod"][symbol] = {"base3m": base_3m, "base1y": base_1y, "baseYtd": base_ytd}
         gain_3m = gain_from(price, base_3m)
         if gain_3m is None and eod_stale:
             gain_3m, gain_3m_stale = previous_stats.get("gain3m"), True
@@ -407,6 +411,31 @@ def build_snapshot():
         "stale": stale,
         "rows": rows,
     }
+
+
+def refresh_in_background():
+    global _refreshing
+
+    with _lock:
+        if _refreshing:
+            return
+        _refreshing = True
+
+    def run():
+        global _snapshot, _refreshing, _refresh_error
+        try:
+            snapshot = build_snapshot()
+            with _lock:
+                _snapshot = snapshot
+                _refresh_error = None
+        except Exception as error:  # noqa: BLE001 - keep the site up if a fetch fails
+            with _lock:
+                _refresh_error = str(error)
+        finally:
+            with _lock:
+                _refreshing = False
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 PCT_COLS = {4, 10, 15, 17, 23, 24, 25}
@@ -585,13 +614,25 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_error(404)
 
     def send_portfolio(self):
-        with _lock:
-            try:
-                payload = build_snapshot()
-            except Exception as error:  # noqa: BLE001 - surface a single client error
-                self.send_json({"error": str(error)}, 500)
-                return
-        self.send_json(payload)
+        if "latest" in self.path or _snapshot is None:
+            refresh_in_background()
+        if _snapshot:
+            payload = dict(_snapshot)
+            payload["refreshing"] = _refreshing
+            self.send_json(payload)
+            return
+        status = market_status()
+        self.send_json(
+            {
+                "refreshing": True,
+                "rows": [],
+                "updated": "",
+                "market": status,
+                "marketOpen": status.startswith("Market is open"),
+                "stale": False,
+                "error": _refresh_error,
+            }
+        )
 
     def send_bytes(self, raw, content_type, filename):
         self.send_response(200)

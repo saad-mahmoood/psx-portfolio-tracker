@@ -371,25 +371,45 @@ function setBusy(busy) {
   document.getElementById("export-xls").disabled = busy || !snapshot;
 }
 
+async function readPortfolio(latest) {
+  const url = latest ? "/api/portfolio?latest=" + Date.now() : "/api/portfolio";
+  const response = await fetch(url, { cache: "no-store" });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || "Refresh failed");
+  return payload;
+}
+
+function showPortfolio(payload) {
+  snapshot = payload;
+  document.getElementById("updated").textContent = payload.updated
+    ? "Last updated " + payload.updated
+    : "Last updated —";
+  const market = document.getElementById("market");
+  market.textContent = payload.market || "—";
+  market.className = "pill " + (payload.marketOpen ? "open" : "closed");
+  document.getElementById("stale").classList.toggle("hidden", !payload.stale);
+  if (payload.rows && payload.rows.length) {
+    renderPortfolio();
+    renderInputs();
+    renderRaw();
+    renderDividends();
+  }
+}
+
 async function load() {
   const loading = document.getElementById("loading");
   setBusy(true);
   loading.classList.remove("hidden");
   document.getElementById("error").classList.add("hidden");
   try {
-    const response = await fetch("/api/portfolio?latest=" + Date.now(), { cache: "no-store" });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "Refresh failed");
-    snapshot = payload;
-    document.getElementById("updated").textContent = "Last updated " + payload.updated;
-    const market = document.getElementById("market");
-    market.textContent = payload.market;
-    market.className = "pill " + (payload.marketOpen ? "open" : "closed");
-    document.getElementById("stale").classList.toggle("hidden", !payload.stale);
-    renderPortfolio();
-    renderInputs();
-    renderRaw();
-    renderDividends();
+    let payload = await readPortfolio(true);
+    showPortfolio(payload);
+    while (payload.refreshing) {
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      payload = await readPortfolio(false);
+      showPortfolio(payload);
+    }
+    if (payload.error && !(payload.rows && payload.rows.length)) throw new Error(payload.error);
   } catch (error) {
     showError(error.message);
   } finally {
