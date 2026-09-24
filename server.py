@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import calendar
 import json
+import os
 import re
 import threading
 import urllib.error
@@ -614,8 +615,10 @@ class Handler(SimpleHTTPRequestHandler):
 
 def main():
     load_cache()
-    server = ThreadingHTTPServer(("127.0.0.1", 8765), Handler)
-    print("PSX Portfolio Tracker at http://127.0.0.1:8765")
+    host = "0.0.0.0"
+    port = int(os.environ.get("PORT", "8765"))
+    server = ThreadingHTTPServer((host, port), Handler)
+    print("PSX Portfolio Tracker at http://%s:%s" % (host, port))
     server.serve_forever()
 
 
